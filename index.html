@@ -82,14 +82,14 @@ function makeFlowers(){
       delay:order[i]*(reduce?20:150),
       tul:TULIP[Math.random()*TULIP.length|0],lil:LILY[Math.random()*LILY.length|0]};
   }).sort((a,b)=>(a.type==='sun'?0:1)-(b.type==='sun'?0:1)||b.len-a.len);  // sunflowers drawn at the back
-  // two flowers, one per side, at mid height, hide a small note
-  const pick=side=>{
-    const c=flowers.filter(f=>f.type!=='sun'&&!f.note&&Math.sign(f.ang)===side&&f.len>.3&&f.len<.8);
-    return c.length?c[Math.random()*c.length|0]:flowers.find(f=>f.type!=='sun'&&!f.note);
-  };
-  const s=Math.random()<.5?-1:1;
-  pick(s).note='miss you';
-  pick(-s).note='be happy!';
+  // four flowers hide a small note: two per side, at different heights so the tags never touch
+  const notes=shuffle(['miss you','be happy!','big hug for you','smile princess']);
+  for(const side of[-1,1]){
+    let c=flowers.filter(f=>f.type!=='sun'&&Math.sign(f.ang)===side&&f.len>.2&&f.len<.85).sort((x,y)=>x.len-y.len);
+    if(c.length<2)c=flowers.filter(f=>f.type!=='sun'&&Math.sign(f.ang)===side).sort((x,y)=>x.len-y.len);
+    for(const f of[c[0],c[c.length-1]])if(f&&!f.note&&notes.length)f.note=notes.pop();
+  }
+  while(notes.length){const f=flowers.find(f=>f.type!=='sun'&&!f.note);if(!f)break;f.note=notes.pop();}
 }
 
 const easeOut=x=>1-Math.pow(1-x,3);
@@ -201,7 +201,7 @@ function drawHead(f,g){
 function tagGeom(f,g,now){
   const[ax,ay]=qpt(g,.9),side=f.ang<0?-1:1;
   const wig=reduce?0:Math.sin(now*.0016+f.ph)*.08+(Math.sin(now*.0007+f.ph)>.97?Math.sin(now*.03)*.12:0);
-  return{ax,ay,side,x:ax+side*g.sz*.75,y:ay+g.sz*.42,w:g.sz*.62,h:g.sz*.42,rot:side*.18+wig};
+  return{ax,ay,side,x:ax+side*g.sz*.95,y:ay+g.sz*.5,w:g.sz*.62,h:g.sz*.42,rot:side*.18+wig};
 }
 function drawTag(f,g,now){
   if(!f.note||g.b<=0)return;
@@ -292,8 +292,8 @@ function frame(now){
   drawVaseMouth();
   const gs=flowers.map(f=>geom(f,now));
   flowers.forEach((f,i)=>drawStem(f,gs[i]));
-  flowers.forEach((f,i)=>drawTag(f,gs[i],now));
   flowers.forEach((f,i)=>drawHead(f,gs[i]));
+  flowers.forEach((f,i)=>drawTag(f,gs[i],now));   // on top, so no other flower can hide a note
   drawVaseBody(now);
   wobble*=.94;
 
