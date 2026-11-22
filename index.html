@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Un vaso per te</title>
+<title>for you princess</title>
 <style>
 /* Layout: one-screen portrait scene on black, tall brown vase at the bottom, bouquet rising from its mouth */
 :root{--bg:#000;color-scheme:dark}
@@ -35,19 +35,24 @@ const TULIP=[['#ef4d63','#b5223b'],['#f58c3d','#c4561a'],['#f26fa3','#bf3c74'],[
 const LILY=[['#ffffff','#f28fb4','#c2306b'],['#fffaf2','#f7b26b','#d0641c'],['#ffffff','#f7c6dd','#d24c86']];
 
 function makeFlowers(){
-  const pool=[];for(let i=0;i<5;i++)pool.push('sun','lily','tulip');
-  for(let i=pool.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[pool[i],pool[j]]=[pool[j],pool[i]];}
-  const N=pool.length,order=[...Array(N).keys()].sort(()=>Math.random()-.5);
+  const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
+  // 4 sunflowers, 6 lilies, 6 tulips
+  const pool=shuffle([...Array(4).fill('sun'),...Array(6).fill('lily'),...Array(6).fill('tulip')]);
+  const N=pool.length,order=shuffle([...Array(N).keys()]);
+  // heights spread evenly from low to high, then mixed, so every flower has its own level
+  const levels=shuffle([...Array(N-4).keys()].map(k=>.04+k*(.8/(N-5))));
   flowers=pool.map((type,i)=>{
-    const f=i/(N-1),ang=(-1+2*f)*.62+rnd(-.06,.06);
-    return{type,ang,
-      len:rnd(.5,1)-Math.abs(ang)*.25,
-      size:type==='sun'?rnd(.2,.23):type==='lily'?rnd(.17,.2):rnd(.13,.15),
+    const f=i/(N-1),ang=(-1+2*f)*.6+rnd(-.05,.05);
+    const len=type==='sun'?rnd(.78,1):levels.pop()+rnd(-.03,.03);
+    const nl=type==='sun'?3:2+(Math.random()<.5?1:0);
+    const side0=Math.random()<.5?-1:1;
+    const leaves=[...Array(nl)].map((_,k)=>({t:.22+k*(.5/nl)+rnd(-.04,.04),side:k%2?-side0:side0,s:rnd(.75,1.1)}));
+    return{type,ang,len,leaves,
+      size:type==='sun'?rnd(.16,.18):type==='lily'?rnd(.16,.19):rnd(.13,.15),
       base:rnd(-.35,.35),ph:rnd(0,6.3),
-      leaf:Math.random()<.6,leafSide:Math.random()<.5?-1:1,
       delay:order[i]*(reduce?20:150),
       tul:TULIP[Math.random()*TULIP.length|0],lil:LILY[Math.random()*LILY.length|0]};
-  }).sort((a,b)=>b.len-a.len);
+  }).sort((a,b)=>(a.type==='sun'?0:1)-(b.type==='sun'?0:1)||b.len-a.len);  // sunflowers drawn at the back
 }
 
 const easeOut=x=>1-Math.pow(1-x,3);
@@ -75,12 +80,19 @@ function drawStem(f,g){
   ctx.beginPath();ctx.moveTo(g.bx,g.by);
   for(let i=1;i<=28;i++){const[x,y]=qpt(g,g.p*i/28);ctx.lineTo(x,y);}
   ctx.stroke();
-  if(f.leaf&&g.p>.6){
-    const k=clamp((g.p-.6)/.3),[x,y]=qpt(g,.55),[dx,dy]=qtan(g,.55);
-    const a=Math.atan2(dy,dx)+f.leafSide*.8,L=g.sz*.85*k;
+  for(const lf of f.leaves){
+    const t=lf.t+.1;
+    if(g.p<=t)continue;
+    const[x,y]=qpt(g,t);
+    if(y>vase.y-4)continue;                 // never inside the vase
+    const k=clamp((g.p-t)/.25),[dx,dy]=qtan(g,t);
+    const a=Math.atan2(dy,dx)+lf.side*.75,L=g.sz*(f.type==='tulip'?1.05:.85)*lf.s*k;
+    const wd=f.type==='lily'?.22:.32;
     ctx.save();ctx.translate(x,y);ctx.rotate(a);
-    ctx.fillStyle='#4f9e57';ctx.beginPath();ctx.moveTo(0,0);
-    ctx.quadraticCurveTo(L*.5,-L*.32,L,0);ctx.quadraticCurveTo(L*.5,L*.32,0,0);ctx.fill();
+    ctx.fillStyle=f.type==='sun'?'#4a9550':'#55a35c';ctx.beginPath();ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(L*.5,-L*wd,L,0);ctx.quadraticCurveTo(L*.5,L*wd,0,0);ctx.fill();
+    ctx.strokeStyle='rgba(20,60,30,.45)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(L*.85,0);ctx.stroke();
     ctx.restore();
   }
 }
@@ -168,7 +180,33 @@ function drawVaseBody(now){
   const g=ctx.createLinearGradient(x-w*.5,0,x+w*.5,0);
   g.addColorStop(0,'#2a180c');g.addColorStop(.32,'#6a4428');g.addColorStop(.62,'#4a2e1a');g.addColorStop(1,'#1c0f07');
   ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle='#7a5234';ctx.lineWidth=Math.max(1.2,w*.015);
+  // decorations: gold bands, a vine with leaves around the belly, a small heart in the middle
+  ctx.save();ctx.clip();
+  const gold='#d9b26a',lw=Math.max(1.2,w*.014);
+  ctx.strokeStyle=gold;ctx.fillStyle=gold;ctx.lineWidth=lw;
+  for(const[yy,ww] of[[y+h*.17,1],[y+h*.21,.6],[y+h*.88,1],[y+h*.92,.6]]){
+    ctx.globalAlpha=ww;ctx.beginPath();ctx.moveTo(x-w*.6,yy);ctx.lineTo(x+w*.6,yy);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  const vy=y+h*.55,amp=h*.06;
+  ctx.beginPath();
+  for(let i=0;i<=60;i++){const px=x-w*.55+i*(w*1.1/60);const py=vy+Math.sin((px-x)/w*9)*amp;i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+  ctx.stroke();
+  for(let i=-5;i<=5;i++){
+    if(i===0)continue;
+    const px=x+i*w*.1,py=vy+Math.sin(i*.9)*amp,up=i%2?-1:1,L=w*.075;
+    ctx.save();ctx.translate(px,py);ctx.rotate(up*(Math.PI/2.6));
+    ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(L*.5,-L*.35,L,0);ctx.quadraticCurveTo(L*.5,L*.35,0,0);ctx.fill();
+    ctx.restore();
+  }
+  for(let i=-4;i<=4;i++){ctx.beginPath();ctx.arc(x+i*w*.12,y+h*.76,w*.012,0,7);ctx.fill();}
+  const hs=w*.11;
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(x,vy,hs*1.05,0,7);ctx.globalAlpha=.25;ctx.fill();ctx.globalAlpha=1;
+  ctx.fillStyle=gold;heart(x,vy+hs*.2,hs*.85);
+  ctx.fillStyle='rgba(255,230,190,.08)';
+  ctx.beginPath();ctx.ellipse(x-w*.22,y+h*.5,w*.05,h*.25,-.05,0,7);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle=gold;ctx.lineWidth=Math.max(1.5,w*.02);
   ctx.beginPath();ctx.ellipse(x,y,vase.lip,w*.05,0,0,Math.PI);ctx.stroke();
   ctx.restore();
 }
