@@ -7,10 +7,22 @@
 html,body{height:100%}
 body{margin:0;overflow:hidden;background:var(--bg);-webkit-tap-highlight-color:transparent;user-select:none}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation;cursor:pointer}
+/* small paper note that unfolds when a hidden tag is tapped */
+.card{position:absolute;left:0;top:0;padding:10px 16px 12px;min-width:92px;text-align:center;
+  background:#f4e8d2;color:#5a2e1c;border-radius:3px;font:700 24px/1.05 "Caveat","Segoe Print","Bradley Hand",cursive;
+  box-shadow:0 6px 18px rgba(0,0,0,.55);transform-origin:50% 0;pointer-events:none;
+  transform:translate(-50%,0) scaleY(0) rotate(var(--r,0deg));opacity:0;transition:transform .45s cubic-bezier(.3,1.4,.5,1),opacity .25s}
+.card::before{content:"";position:absolute;left:50%;top:5px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#000;opacity:.55}
+.card::after{content:"";position:absolute;left:8px;right:8px;top:50%;border-top:1px solid rgba(90,46,28,.12)}
+.card.open{transform:translate(-50%,0) scaleY(1) rotate(var(--r,0deg));opacity:1}
+.card span{display:block;padding-top:6px;position:relative;z-index:1}
+@media (prefers-reduced-motion:reduce){.card{transition:opacity .2s}}
 </style>
-
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&display=swap">
 </head><body>
 <canvas id="c" aria-label="Un vaso: toccalo per far sbocciare i fiori" role="img"></canvas>
+<div class="card" id="card" aria-live="polite"><span id="cardText"></span></div>
 
 <script>
 (()=>{
@@ -53,6 +65,14 @@ function makeFlowers(){
       delay:order[i]*(reduce?20:150),
       tul:TULIP[Math.random()*TULIP.length|0],lil:LILY[Math.random()*LILY.length|0]};
   }).sort((a,b)=>(a.type==='sun'?0:1)-(b.type==='sun'?0:1)||b.len-a.len);  // sunflowers drawn at the back
+  // two flowers, one per side, at mid height, hide a small note
+  const pick=side=>{
+    const c=flowers.filter(f=>f.type!=='sun'&&!f.note&&Math.sign(f.ang)===side&&f.len>.3&&f.len<.8);
+    return c.length?c[Math.random()*c.length|0]:flowers.find(f=>f.type!=='sun'&&!f.note);
+  };
+  const s=Math.random()<.5?-1:1;
+  pick(s).note='miss you';
+  pick(-s).note='be happy!';
 }
 
 const easeOut=x=>1-Math.pow(1-x,3);
@@ -160,6 +180,26 @@ function drawHead(f,g){
   ctx.restore();
 }
 
+// little paper tag tied just under the flower head, half hidden by the petals
+function tagGeom(f,g,now){
+  const[ax,ay]=qpt(g,.9),side=f.ang<0?-1:1;
+  const wig=reduce?0:Math.sin(now*.0016+f.ph)*.08+(Math.sin(now*.0007+f.ph)>.97?Math.sin(now*.03)*.12:0);
+  return{ax,ay,side,x:ax+side*g.sz*.75,y:ay+g.sz*.42,w:g.sz*.62,h:g.sz*.42,rot:side*.18+wig};
+}
+function drawTag(f,g,now){
+  if(!f.note||g.b<=0)return;
+  const t=tagGeom(f,g,now),k=Math.min(1,g.b);
+  ctx.save();ctx.globalAlpha=k;
+  ctx.strokeStyle='rgba(235,220,190,.7)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(t.ax,t.ay);ctx.lineTo(t.x-t.side*t.w*.38,t.y-t.h*.4);ctx.stroke();
+  ctx.translate(t.x,t.y);ctx.rotate(t.rot);ctx.scale(k,k);
+  ctx.fillStyle='#efe1c6';ctx.fillRect(-t.w/2,-t.h/2,t.w,t.h);
+  ctx.fillStyle='rgba(120,70,40,.25)';ctx.fillRect(-t.w/2,-t.h/2,t.w,t.h*.18);
+  ctx.strokeStyle='rgba(120,70,40,.35)';ctx.lineWidth=.8;
+  ctx.beginPath();ctx.moveTo(-t.w*.3,t.h*.1);ctx.lineTo(t.w*.3,t.h*.1);ctx.stroke();
+  ctx.restore();
+}
+
 // tall, plain vase: narrow neck, soft shoulder, slight taper to the foot
 function vasePath(x,y,w,h){
   const lip=w*.3,neck=w*.24,foot=w*.34;
@@ -234,6 +274,7 @@ function frame(now){
   drawVaseMouth();
   const gs=flowers.map(f=>geom(f,now));
   flowers.forEach((f,i)=>drawStem(f,gs[i]));
+  flowers.forEach((f,i)=>drawTag(f,gs[i],now));
   flowers.forEach((f,i)=>drawHead(f,gs[i]));
   drawVaseBody(now);
   wobble*=.94;
@@ -252,10 +293,33 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
+const card=document.getElementById('card'),cardText=document.getElementById('cardText');
+let cardOpen=false;
+function openCard(f,t){
+  cardText.textContent=f.note;
+  const x=Math.max(70,Math.min(W-70,t.x)),y=Math.min(H-90,t.y+t.h);
+  card.style.left=x+'px';card.style.top=y+'px';
+  card.style.setProperty('--r',(t.side*rnd(2,5)).toFixed(1)+'deg');
+  card.classList.add('open');cardOpen=true;
+}
+function closeCard(){card.classList.remove('open');cardOpen=false;}
+function hitNote(px,py,now){
+  for(const f of flowers){
+    if(!f.note)continue;
+    const g=geom(f,now);if(g.b<.9)continue;
+    const t=tagGeom(f,g,now),rt=Math.max(22,g.sz*.6);
+    if(Math.hypot(px-t.x,py-t.y)<rt)return[f,t];
+  }
+  return null;
+}
 cv.addEventListener('pointerdown',e=>{
-  if(!started){makeFlowers();started=performance.now();wobble=reduce?0:.06;return;}
+  const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,now=performance.now();
+  if(!started){makeFlowers();started=now;wobble=reduce?0:.06;return;}
+  if(cardOpen){closeCard();return;}
+  const hit=hitNote(px,py,now);
+  if(hit){openCard(hit[0],hit[1]);return;}
   wobble=reduce?0:.04;
-  if(doneAt){const r=cv.getBoundingClientRect();burst(e.clientX-r.left,e.clientY-r.top);}
+  if(doneAt)burst(px,py);
 });
 requestAnimationFrame(frame);
 })();
