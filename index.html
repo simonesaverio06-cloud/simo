@@ -29,7 +29,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const GROW=reduce?200:1100, BLOOM=reduce?200:850;
-let W=0,H=0,col=0,vase={},flowers=[],parts=[],started=0,doneAt=0,wobble=0,lastPetal=0;
+let stars=[],W=0,H=0,col=0,vase={},flowers=[],parts=[],started=0,doneAt=0,wobble=0,lastPetal=0;
 
 function resize(){
   const d=Math.min(devicePixelRatio||1,2);
@@ -37,12 +37,29 @@ function resize(){
   cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);
   col=Math.min(W,H*0.6);                 // portrait column, also on wide screens
   vase.w=col*0.3;vase.h=Math.min(vase.w*2,H*0.34);
-  vase.x=W/2;vase.y=H-vase.h-H*0.05;
+  vase.x=W/2;vase.y=H-vase.h-H*0.02;
+  makeStars();
   vase.lip=vase.w*0.3;
 }
 addEventListener('resize',resize);resize();
 
-const rnd=(a,b)=>a+Math.random()*(b-a);
+function rnd(a,b){return a+Math.random()*(b-a);}
+function makeStars(){
+  const n=Math.round(W*H*.4/2600);
+  stars=[...Array(n)].map(()=>{
+    const y=Math.pow(Math.random(),1.6)*H*.42;           // denser near the top
+    return{x:Math.random()*W,y,r:Math.random()<.12?rnd(1,1.4):rnd(.35,.8),ph:rnd(0,6.3),sp:rnd(.0006,.0018),fade:1-y/(H*.42)};
+  });
+}
+function drawStars(now){
+  for(const s of stars){
+    const tw=reduce?.8:.55+.45*Math.sin(now*s.sp+s.ph);
+    ctx.globalAlpha=Math.max(0,tw)*(.35+.65*s.fade);
+    ctx.fillStyle='#fff6e0';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fill();
+    if(s.r>1){ctx.globalAlpha*=.5;ctx.fillRect(s.x-s.r*3,s.y-.25,s.r*6,.5);ctx.fillRect(s.x-.25,s.y-s.r*3,.5,s.r*6);}
+  }
+  ctx.globalAlpha=1;
+}
 const TULIP=[['#ef4d63','#b5223b'],['#f58c3d','#c4561a'],['#f26fa3','#bf3c74'],['#f5d24c','#cf9a17'],['#c36bd6','#8a3aa3']];
 const LILY=[['#ffffff','#f28fb4','#c2306b'],['#fffaf2','#f7b26b','#d0641c'],['#ffffff','#f7c6dd','#d24c86']];
 
@@ -81,7 +98,7 @@ const clamp=x=>Math.max(0,Math.min(1,x));
 
 function geom(f,now){
   const top=vase.y,sz=f.size*col*.5;
-  const minUp=sz*1.4,Ry=top-H*0.06-sz,Rx=col*.46;
+  const minUp=sz*1.4,Ry=top-H*0.15-sz,Rx=col*.46;
   const bx=vase.x+f.base*vase.lip,by=top+vase.h*.25;
   let hx=vase.x+Math.sin(f.ang)*Rx,hy=top-minUp-(Ry-minUp)*f.len;
   const t=started?now-started-f.delay:-1;
@@ -271,6 +288,7 @@ function dropPetal(now){
 
 function frame(now){
   ctx.clearRect(0,0,W,H);
+  drawStars(now);
   drawVaseMouth();
   const gs=flowers.map(f=>geom(f,now));
   flowers.forEach((f,i)=>drawStem(f,gs[i]));
